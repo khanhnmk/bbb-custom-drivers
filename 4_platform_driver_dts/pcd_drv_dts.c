@@ -15,6 +15,13 @@
 
 #define MAX_DEVICES 10
 
+enum pcdev_name {
+    PCDEV_A = 0,
+    PCDEV_B,
+    PCDEV_C,
+    PCDEV_D,
+};
+
 #define MEM_SIZE_PCDEV1 512
 #define MEM_SIZE_PCDEV2 1024
 #define MEM_SIZE_PCDEV3 512
@@ -165,39 +172,48 @@ ssize_t pcd_write(struct file *filp, const char __user *buff, size_t count, loff
 
 struct platform_device_id pcdevs_ids[] = 
 {
-	[0] = {.name = "pcdev-A1x", .driver_data = (kernel_ulong_t)&pcdev_data[0]},
-	[1] = {.name = "pcdev-B1x", .driver_data = (kernel_ulong_t)&pcdev_data[1]},
-	[2] = {.name = "pcdev-C1x", .driver_data = (kernel_ulong_t)&pcdev_data[2]},
-	[3] = {.name = "pcdev-D1x", .driver_data = (kernel_ulong_t)&pcdev_data[3]},
+	{.name = "pcdev-A1x", .driver_data = (kernel_ulong_t)&pcdev_data[PCDEV_A]},
+	{.name = "pcdev-B1x", .driver_data = (kernel_ulong_t)&pcdev_data[PCDEV_B]},
+	{.name = "pcdev-C1x", .driver_data = (kernel_ulong_t)&pcdev_data[PCDEV_C]},
+	{.name = "pcdev-D1x", .driver_data = (kernel_ulong_t)&pcdev_data[PCDEV_D]},
 	{ } /*Null termination */
+};
+
+struct of_device_id pcdevs_dt_match[] = {
+    {.compatible = "pcdev-Ax", .data = &pcdev_data[PCDEV_A]},
+    {.compatible = "pcdev-Bx", .data = &pcdev_data[PCDEV_B]},
+    {.compatible = "pcdev-Cx", .data = &pcdev_data[PCDEV_C]},
+    {.compatible = "pcdev-Dx", .data = &pcdev_data[PCDEV_D]},
+    {}
 };
 
 int pcd_platform_driver_probe(struct platform_device *pdev) {
     pr_info(" probe !!!\n");
 
-    int ret;
-    struct pcdev_private_data *pcdevX_data;
-    pcdevX_data = pdev->id_entry->driver_data;
-    // pr_info("pcdevX_data - serial: %s\n", pcdevX_data->serial_number);
+    // int ret;
+    // struct pcdev_private_data *pcdevX_data;
+    // pcdevX_data = (struct pcdev_private_data*)pdev->id_entry->driver_data;
+    // // pr_info("pcdevX_data - serial: %s\n", pcdevX_data->serial_number);
 
-    int id = pdev->id;
+    // int id = (int) pdev->id;
 
-    cdev_init(&pcdevX_data->cdev,&pcd_fops);
-    ret = cdev_add(&pcdevX_data->cdev,pcdrv_data.device_number+id,1);
-    if(ret < 0){
-		pr_err("Cdev add failed\n");
-		return ret;
-	}
+    // cdev_init(&pcdevX_data->cdev,&pcd_fops);
+    // ret = cdev_add(&pcdevX_data->cdev,pcdrv_data.device_number+id,1);
+    // if(ret < 0){
+	// 	pr_err("Cdev add failed\n");
+	// 	return ret;
+	// }
 
-    pcdrv_data.device_pcd = device_create(pcdrv_data.class_pcd,NULL,pcdrv_data.device_number+id,NULL,"pcdev-%d",pdev->id);
-    if(IS_ERR(pcdrv_data.device_pcd)){
-		pr_err("Device create failed\n");
-		ret = PTR_ERR(pcdrv_data.device_pcd);
-		cdev_del(&pcdevX_data->cdev);
-		return ret;
-	}
+    // pcdrv_data.device_pcd = device_create(pcdrv_data.class_pcd,NULL,pcdrv_data.device_number+id,NULL,"pcdev-%d",pdev->id);
+    // if(IS_ERR(pcdrv_data.device_pcd)){
+	// 	pr_err("Device create failed\n");
+	// 	ret = PTR_ERR(pcdrv_data.device_pcd);
+	// 	cdev_del(&pcdevX_data->cdev);
+	// 	return ret;
+	// }
 
     pcdrv_data.total_devices++;
+    pr_err("Num of device: %d\n", pcdrv_data.total_devices);
     return 0;
 }
 
@@ -205,19 +221,19 @@ int pcd_platform_driver_remove(struct platform_device *pdev)
 {
     pr_info(" remove !!!\n");
 
-    int ret;
+    // int ret;
 
-    struct pcdev_private_data *pcdevX_data;
-    pcdevX_data = pdev->id_entry->driver_data;
+    // struct pcdev_private_data *pcdevX_data;
+    // pcdevX_data = (struct pcdev_private_data*) pdev->id_entry->driver_data;
 
-    int id = pdev->id;
+    // int id = (int)pdev->id;
 
-    device_destroy(pcdrv_data.class_pcd,pcdrv_data.device_number+id);
-    cdev_del(&pcdevX_data->cdev);
+    // device_destroy(pcdrv_data.class_pcd,pcdrv_data.device_number+id);
+    // cdev_del(&pcdevX_data->cdev);
 
     pcdrv_data.total_devices--;
 
-	pr_info("A device is removed\n");
+	pr_info("A device is removed, num of existing device: %d\n", pcdrv_data.total_devices);
 
 	return 0;
 }
@@ -228,7 +244,8 @@ struct platform_driver pcd_platform_driver =
 	.remove = pcd_platform_driver_remove,
 	.id_table = pcdevs_ids,
 	.driver = {
-		.name = "pseudo-char-device"
+		.name = "pseudo-char-device",
+		.of_match_table = pcdevs_dt_match
 	}
 
 };
@@ -279,4 +296,4 @@ module_exit(pcd_platform_driver_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("minkha");
-MODULE_DESCRIPTION("A pseudo character platform driver handles n platform pcdevs with platformn data");
+MODULE_DESCRIPTION("A pseudo character platform driver which handles n platform pcdevs with device tree");

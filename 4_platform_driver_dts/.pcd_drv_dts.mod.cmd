@@ -1,0 +1,1 @@
+cmd_/home/minkha/workspace/bbb_workspace/bbb-custom-drivers/4_platform_driver_dts/pcd_drv_dts.mod := { echo  /home/minkha/workspace/bbb_workspace/bbb-custom-drivers/4_platform_driver_dts/pcd_drv_dts.o;  echo; } > /home/minkha/workspace/bbb_workspace/bbb-custom-drivers/4_platform_driver_dts/pcd_drv_dts.mod
