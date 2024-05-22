@@ -7,6 +7,8 @@
 #include <linux/platform_device.h>
 #include<linux/slab.h>
 #include<linux/mod_devicetable.h>
+#include<linux/of.h>
+#include<linux/of_device.h>
 #include<linux/property.h>
 
 
@@ -70,7 +72,9 @@ struct pcdev_private_data pcdev_data[MAX_DEVICES] = {
     },
 };
 
-struct pcdrv_private_data pcdrv_data;
+struct pcdrv_private_data pcdrv_data = {
+    .total_devices = 0
+};
 
 int pcd_open(struct inode *inode, struct file *filp);
 int pcd_release(struct inode *inode, struct file *flip);
@@ -190,27 +194,54 @@ struct of_device_id pcdevs_dt_match[] = {
 int pcd_platform_driver_probe(struct platform_device *pdev) {
     pr_info(" probe !!!\n");
 
-    // int ret;
-    // struct pcdev_private_data *pcdevX_data;
-    // pcdevX_data = (struct pcdev_private_data*)pdev->id_entry->driver_data;
-    // // pr_info("pcdevX_data - serial: %s\n", pcdevX_data->serial_number);
+    struct pcdev_private_data *pcdevX_data;
+	
+    /* Check if the probe was triggered by a Device Tree match */
+	const struct of_device_id *match;
+    match = of_match_device(pcdevs_dt_match, &pdev->dev); 
+    if(match) {
+        pr_info(" device tree !\n");
+        // pcdevX_data = device_get_match_data(&pdev->dev);              // if using platform data
+        // pr_info("Serial: %s", pcdevX_data->serial_number);
 
-    // int id = (int) pdev->id;
+        // CAUTION: nead to kzalloc before get info from device tree !!!!
+        pcdevX_data = devm_kzalloc(&pdev->dev,sizeof(*pcdevX_data),GFP_KERNEL);    
+        pr_info("check 1");
+        if(of_property_read_string(pdev->dev.of_node, "org,device-serial-num", &pcdevX_data->serial_number) ){
+		    pr_info("Missing serial number property\n");
+		    return ERR_PTR(-EINVAL);
+        }
+        pr_info("Serial: %s", pcdevX_data->serial_number);
+	    if(of_property_read_u32(pdev->dev.of_node,"org,size",&pcdevX_data->size) ){
+	    	pr_info("Missing size property\n");
+	    	return ERR_PTR(-EINVAL);
+	    }
+        pr_info("Size: %d", pcdevX_data->size);
+        pcdevX_data->buffer = devm_kzalloc(&pdev->dev, pcdevX_data->size,GFP_KERNEL);
+	    if(!pcdevX_data->buffer){
+	    	pr_info("Cannot allocate memory \n");
+	    	return -ENOMEM;
+	    }
+        /*save the device private data pointer in platform device structure */
+	    dev_set_drvdata(&pdev->dev,pcdevX_data);
+    } else {
+        pcdevX_data = pdev->id_entry->driver_data;
+    }
 
-    // cdev_init(&pcdevX_data->cdev,&pcd_fops);
-    // ret = cdev_add(&pcdevX_data->cdev,pcdrv_data.device_number+id,1);
-    // if(ret < 0){
-	// 	pr_err("Cdev add failed\n");
-	// 	return ret;
-	// }
+    cdev_init(&pcdevX_data->cdev,&pcd_fops);
+    int ret = cdev_add(&pcdevX_data->cdev,pcdrv_data.device_number+pcdrv_data.total_devices,1);
+    if(ret < 0){
+		pr_err("Cdev add failed\n");
+		return ret;
+	}
 
-    // pcdrv_data.device_pcd = device_create(pcdrv_data.class_pcd,NULL,pcdrv_data.device_number+id,NULL,"pcdev-%d",pdev->id);
-    // if(IS_ERR(pcdrv_data.device_pcd)){
-	// 	pr_err("Device create failed\n");
-	// 	ret = PTR_ERR(pcdrv_data.device_pcd);
-	// 	cdev_del(&pcdevX_data->cdev);
-	// 	return ret;
-	// }
+    pcdrv_data.device_pcd = device_create(pcdrv_data.class_pcd,NULL,pcdrv_data.device_number+pcdrv_data.total_devices,NULL,"pcdev-%d",pcdrv_data.total_devices);
+    if(IS_ERR(pcdrv_data.device_pcd)){
+		pr_err("Device create failed\n");
+		ret = PTR_ERR(pcdrv_data.device_pcd);
+		cdev_del(&pcdevX_data->cdev);
+		return ret;
+	}
 
     pcdrv_data.total_devices++;
     pr_err("Num of device: %d\n", pcdrv_data.total_devices);
@@ -221,17 +252,16 @@ int pcd_platform_driver_remove(struct platform_device *pdev)
 {
     pr_info(" remove !!!\n");
 
-    // int ret;
+    int ret;
 
-    // struct pcdev_private_data *pcdevX_data;
+    struct pcdev_private_data *pcdevX_data;
+    pcdevX_data = dev_get_drvdata(&pdev->dev);
     // pcdevX_data = (struct pcdev_private_data*) pdev->id_entry->driver_data;
 
-    // int id = (int)pdev->id;
-
-    // device_destroy(pcdrv_data.class_pcd,pcdrv_data.device_number+id);
-    // cdev_del(&pcdevX_data->cdev);
-
     pcdrv_data.total_devices--;
+
+    device_destroy(pcdrv_data.class_pcd,pcdrv_data.device_number+pcdrv_data.total_devices);
+    cdev_del(&pcdevX_data->cdev);
 
 	pr_info("A device is removed, num of existing device: %d\n", pcdrv_data.total_devices);
 
